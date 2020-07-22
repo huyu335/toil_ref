@@ -22,7 +22,7 @@ logger = logging.getLogger( __name__ )
 class JobGraph(JobNode):
     """
     A class encapsulating the minimal state of a Toil job. Instances of this class are persisted
-    in the job store and held in memory by the master. The actual state of job objects in user
+    in the job store and held in memory by the main. The actual state of job objects in user
     scripts is persisted separately since it may be much bigger than the state managed by this
     class and should therefore only be held in memory for brief periods of time.
     """

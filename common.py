@@ -215,7 +215,7 @@ class Config(object):
         setBatchOptions(self, setOption)
         setOption("disableAutoDeployment")
         setOption("scale", float, fC(0.0))
-        setOption("mesosMasterAddress")
+        setOption("mesosMainAddress")
         setOption("parasolCommand")
         setOption("parasolMaxBatches", int, iC(1))
         setOption("linkImports")
@@ -529,7 +529,7 @@ def _addOptions(addGroupFn, config):
                 default=None, const=os.getcwd(),
                 help="Identical to --writeLogs except the logs files are gzipped on the leader.")
     addOptionFn("--realTimeLogging", dest="realTimeLogging", action="store_true", default=False,
-                help="Enable real-time logging from workers to masters")
+                help="Enable real-time logging from workers to mains")
 
     addOptionFn("--sseKey", dest="sseKey", default=None,
             help="Path to file containing 32 character key to be used for server-side encryption on "

@@ -207,7 +207,7 @@ class AbstractProvisioner(with_metaclass(ABCMeta, object)):
     @classmethod
     def _sshAppliance(cls, leaderIP, *args, **kwargs):
         """
-        :param str leaderIP: IP of the master
+        :param str leaderIP: IP of the main
         :param args: arguments to execute in the appliance
         :param kwargs: tty=bool tells docker whether or not to create a TTY shell for
             interactive SSHing. The default value is False. Input=string is passed as

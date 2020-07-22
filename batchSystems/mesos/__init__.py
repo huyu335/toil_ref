@@ -25,10 +25,10 @@ from threading import Lock
 TaskData = namedtuple('TaskData', (
     # Time when the task was started
     'startTime',
-    # Mesos' ID of the slave where task is being run
-    'slaveID',
-    # IP of slave where task is being run
-    'slaveIP',
+    # Mesos' ID of the subordinate where task is being run
+    'subordinateID',
+    # IP of subordinate where task is being run
+    'subordinateIP',
     # Mesos' ID of the executor running the task
     'executorID',
     # Memory requirement of the task
