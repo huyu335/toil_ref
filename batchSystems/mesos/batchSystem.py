@@ -56,12 +56,12 @@ class MesosBatchSystem(BatchSystemLocalSupport,
                        mesos.interface.Scheduler):
     """
     A Toil batch system implementation that uses Apache Mesos to distribute toil jobs as Mesos
-    tasks over a cluster of slave nodes. A Mesos framework consists of a scheduler and an
-    executor. This class acts as the scheduler and is typically run on the master node that also
-    runs the Mesos master process with which the scheduler communicates via a driver component.
-    The executor is implemented in a separate class. It is run on each slave node and
-    communicates with the Mesos slave process via another driver object. The scheduler may also
-    be run on a separate node from the master, which we then call somewhat ambiguously the driver
+    tasks over a cluster of subordinate nodes. A Mesos framework consists of a scheduler and an
+    executor. This class acts as the scheduler and is typically run on the main node that also
+    runs the Mesos main process with which the scheduler communicates via a driver component.
+    The executor is implemented in a separate class. It is run on each subordinate node and
+    communicates with the Mesos subordinate process via another driver object. The scheduler may also
+    be run on a separate node from the main, which we then call somewhat ambiguously the driver
     node.
     """
 
@@ -74,10 +74,10 @@ class MesosBatchSystem(BatchSystemLocalSupport,
         return True
 
     class ExecutorInfo(object):
-        def __init__(self, nodeAddress, slaveId, nodeInfo, lastSeen):
+        def __init__(self, nodeAddress, subordinateId, nodeInfo, lastSeen):
             super(MesosBatchSystem.ExecutorInfo, self).__init__()
             self.nodeAddress = nodeAddress
-            self.slaveId = slaveId
+            self.subordinateId = subordinateId
             self.nodeInfo = nodeInfo
             self.lastSeen = lastSeen
 
@@ -95,8 +95,8 @@ class MesosBatchSystem(BatchSystemLocalSupport,
         # defined by resource usage
         self.jobQueues = JobQueue()
 
-        # Address of the Mesos master in the form host:port where host can be an IP or a hostname
-        self.mesosMasterAddress = config.mesosMasterAddress
+        # Address of the Mesos main in the form host:port where host can be an IP or a hostname
+        self.mesosMainAddress = config.mesosMainAddress
 
         # Written to when Mesos kills tasks, as directed by Toil
         self.killedJobIds = set()
@@ -134,7 +134,7 @@ class MesosBatchSystem(BatchSystemLocalSupport,
         # properties of our executor running on that node. Only an approximation of the truth.
         self.executors = {}
 
-        # A set of Mesos slave IDs, one for each slave running on a non-preemptable node. Only an
+        # A set of Mesos subordinate IDs, one for each subordinate running on a non-preemptable node. Only an
         #  approximation of the truth. Recently launched nodes may be absent from this set for a
         # while and a node's absence from this set does not imply its preemptability. But it is
         # generally safer to assume a node is preemptable since non-preemptability is a stronger
@@ -281,7 +281,7 @@ class MesosBatchSystem(BatchSystemLocalSupport,
 
     def _startDriver(self):
         """
-        The Mesos driver thread which handles the scheduler's communication with the Mesos master
+        The Mesos driver thread which handles the scheduler's communication with the Mesos main
         """
         framework = mesos_pb2.FrameworkInfo()
         framework.user = ""  # Have Mesos fill in the current user.
@@ -289,7 +289,7 @@ class MesosBatchSystem(BatchSystemLocalSupport,
         framework.principal = framework.name
         self.driver = mesos.native.MesosSchedulerDriver(self,
                                                         framework,
-                                                        self._resolveAddress(self.mesosMasterAddress),
+                                                        self._resolveAddress(self.mesosMainAddress),
                                                         True)  # enable implicit acknowledgements
         assert self.driver.start() == mesos_pb2.DRIVER_RUNNING
 
@@ -325,9 +325,9 @@ class MesosBatchSystem(BatchSystemLocalSupport,
         if driver_result != mesos_pb2.DRIVER_STOPPED:
             raise RuntimeError("Mesos driver failed with %i", driver_result)
 
-    def registered(self, driver, frameworkId, masterInfo):
+    def registered(self, driver, frameworkId, mainInfo):
         """
-        Invoked when the scheduler successfully registers with a Mesos master
+        Invoked when the scheduler successfully registers with a Mesos main
         """
         log.debug("Registered with framework ID %s", frameworkId.value)
 
@@ -346,7 +346,7 @@ class MesosBatchSystem(BatchSystemLocalSupport,
                 assert preemptable is None, "Attribute 'preemptable' occurs more than once."
                 preemptable = strict_bool(attribute.text.value)
         if preemptable is None:
-            log.debug('Slave not marked as either preemptable or not. Assuming non-preemptable.')
+            log.debug('Subordinate not marked as either preemptable or not. Assuming non-preemptable.')
             preemptable = False
         for resource in offer.resources:
             if resource.name == "cpus":
@@ -367,15 +367,15 @@ class MesosBatchSystem(BatchSystemLocalSupport,
         for task in runnableTasks:
             resourceKey = int(task.task_id.value)
             resources = self.taskResources[resourceKey]
-            slaveIP = socket.gethostbyname(offer.hostname)
+            subordinateIP = socket.gethostbyname(offer.hostname)
             try:
-                self.hostToJobIDs[slaveIP].append(resourceKey)
+                self.hostToJobIDs[subordinateIP].append(resourceKey)
             except KeyError:
-                self.hostToJobIDs[slaveIP] = [resourceKey]
+                self.hostToJobIDs[subordinateIP] = [resourceKey]
 
             self.runningJobMap[int(task.task_id.value)] = TaskData(startTime=time.time(),
-                                                                   slaveID=offer.slave_id.value,
-                                                                   slaveIP=slaveIP,
+                                                                   subordinateID=offer.subordinate_id.value,
+                                                                   subordinateIP=subordinateIP,
                                                                    executorID=task.executor.executor_id.value,
                                                                    cores=resources.cores,
                                                                    memory=resources.memory)
@@ -408,7 +408,7 @@ class MesosBatchSystem(BatchSystemLocalSupport,
             runnableTasks = []
             # TODO: In an offer, can there ever be more than one resource with the same name?
             offerCores, offerMemory, offerDisk, offerPreemptable = self._parseOffer(offer)
-            log.debug('Got offer %s for a %spreemptable slave with %.2f MiB memory, %.2f core(s) '
+            log.debug('Got offer %s for a %spreemptable subordinate with %.2f MiB memory, %.2f core(s) '
                       'and %.2f MiB of disk.', offer.id.value, '' if offerPreemptable else 'non-',
                       offerMemory, offerCores, offerDisk)
             remainingCores = offerCores
@@ -444,7 +444,7 @@ class MesosBatchSystem(BatchSystemLocalSupport,
                     # report that remaining jobs cannot be run with the current resourcesq:
                     log.debug('Offer %(offer)s not suitable to run the tasks with requirements '
                               '%(requirements)r. Mesos offered %(memory)s memory, %(cores)s cores '
-                              'and %(disk)s of disk on a %(non)spreemptable slave.',
+                              'and %(disk)s of disk on a %(non)spreemptable subordinate.',
                               dict(offer=offer.id.value,
                                    requirements=jobType.__dict__,
                                    non='' if offerPreemptable else 'non-',
@@ -472,18 +472,18 @@ class MesosBatchSystem(BatchSystemLocalSupport,
     def _trackOfferedNodes(self, offers):
         for offer in offers:
             nodeAddress = socket.gethostbyname(offer.hostname)
-            self._registerNode(nodeAddress, offer.slave_id.value)
+            self._registerNode(nodeAddress, offer.subordinate_id.value)
             preemptable = False
             for attribute in offer.attributes:
                 if attribute.name == 'preemptable':
                     preemptable = strict_bool(attribute.text.value)
             if preemptable:
                 try:
-                    self.nonPreemptableNodes.remove(offer.slave_id.value)
+                    self.nonPreemptableNodes.remove(offer.subordinate_id.value)
                 except KeyError:
                     pass
             else:
-                self.nonPreemptableNodes.add(offer.slave_id.value)
+                self.nonPreemptableNodes.add(offer.subordinate_id.value)
 
     def _filterOfferedNodes(self, offers):
         if not self.nodeFilter:
@@ -500,7 +500,7 @@ class MesosBatchSystem(BatchSystemLocalSupport,
         """
         task = mesos_pb2.TaskInfo()
         task.task_id.value = str(job.jobID)
-        task.slave_id.value = offer.slave_id.value
+        task.subordinate_id.value = offer.subordinate_id.value
         task.name = job.name
         task.data = pickle.dumps(job)
         task.executor.MergeFrom(self.executor)
@@ -532,12 +532,12 @@ class MesosBatchSystem(BatchSystemLocalSupport,
 
     def statusUpdate(self, driver, update):
         """
-        Invoked when the status of a task has changed (e.g., a slave is lost and so the task is
+        Invoked when the status of a task has changed (e.g., a subordinate is lost and so the task is
         lost, a task finishes and an executor sends a status update saying so, etc). Note that
         returning from this callback _acknowledges_ receipt of this status update! If for
         whatever reason the scheduler aborts during this callback (or the process exits) another
         status update will be delivered (note, however, that this is currently not true if the
-        slave sending the status update is lost/fails during that time).
+        subordinate sending the status update is lost/fails during that time).
         """
         jobID = int(update.task_id.value)
         stateName = mesos_pb2.TaskState.Name(update.state)
@@ -551,9 +551,9 @@ class MesosBatchSystem(BatchSystemLocalSupport,
             else:
                 self.killedJobIds.add(jobID)
             self.updatedJobsQueue.put((jobID, _exitStatus, wallTime))
-            slaveIP = None
+            subordinateIP = None
             try:
-                slaveIP = self.runningJobMap[jobID].slaveIP
+                subordinateIP = self.runningJobMap[jobID].subordinateIP
             except KeyError:
                 log.warning("Job %i returned exit code %i but isn't tracked as running.",
                             jobID, _exitStatus)
@@ -561,7 +561,7 @@ class MesosBatchSystem(BatchSystemLocalSupport,
                 del self.runningJobMap[jobID]
 
             try:
-                self.hostToJobIDs[slaveIP].remove(jobID)
+                self.hostToJobIDs[subordinateIP].remove(jobID)
             except KeyError:
                 log.warning("Job %i returned exit code %i from unknown host.",
                             jobID, _exitStatus)
@@ -582,17 +582,17 @@ class MesosBatchSystem(BatchSystemLocalSupport,
                         jobID, stateName, update.message)
             jobEnded(255)
 
-    def frameworkMessage(self, driver, executorId, slaveId, message):
+    def frameworkMessage(self, driver, executorId, subordinateId, message):
         """
         Invoked when an executor sends a message.
         """
-        log.debug('Got framework message from executor %s running on slave %s: %s',
-                  executorId.value, slaveId.value, message)
+        log.debug('Got framework message from executor %s running on subordinate %s: %s',
+                  executorId.value, subordinateId.value, message)
         message = ast.literal_eval(message)
         assert isinstance(message, dict)
         # Handle the mandatory fields of a message
         nodeAddress = message.pop('address')
-        executor = self._registerNode(nodeAddress, slaveId.value)
+        executor = self._registerNode(nodeAddress, subordinateId.value)
         # Handle optional message fields
         for k, v in iteritems(message):
             if k == 'nodeInfo':
@@ -606,11 +606,11 @@ class MesosBatchSystem(BatchSystemLocalSupport,
             else:
                 raise RuntimeError("Unknown message field '%s'." % k)
 
-    def _registerNode(self, nodeAddress, slaveId):
+    def _registerNode(self, nodeAddress, subordinateId):
         executor = self.executors.get(nodeAddress)
-        if executor is None or executor.slaveId != slaveId:
+        if executor is None or executor.subordinateId != subordinateId:
             executor = self.ExecutorInfo(nodeAddress=nodeAddress,
-                                         slaveId=slaveId,
+                                         subordinateId=subordinateId,
                                          nodeInfo=None,
                                          lastSeen=time.time())
             self.executors[nodeAddress] = executor
@@ -624,15 +624,15 @@ class MesosBatchSystem(BatchSystemLocalSupport,
                 for nodeAddress, executor in iteritems(self.executors)
                 if time.time() - executor.lastSeen < timeout
                 and (preemptable is None
-                     or preemptable == (executor.slaveId not in self.nonPreemptableNodes))}
+                     or preemptable == (executor.subordinateId not in self.nonPreemptableNodes))}
 
-    def reregistered(self, driver, masterInfo):
+    def reregistered(self, driver, mainInfo):
         """
-        Invoked when the scheduler re-registers with a newly elected Mesos master.
+        Invoked when the scheduler re-registers with a newly elected Mesos main.
         """
-        log.debug('Registered with new master')
+        log.debug('Registered with new main')
 
-    def executorLost(self, driver, executorId, slaveId, status):
+    def executorLost(self, driver, executorId, subordinateId, status):
         """
         Invoked when an executor has exited/terminated.
         """
@@ -640,7 +640,7 @@ class MesosBatchSystem(BatchSystemLocalSupport,
 
     @classmethod
     def setOptions(cl, setOption):
-        setOption("mesosMasterAddress", None, None, 'localhost:5050')
+        setOption("mesosMainAddress", None, None, 'localhost:5050')
 
 
 def toMiB(n):

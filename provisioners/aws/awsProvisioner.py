@@ -111,7 +111,7 @@ class AWSProvisioner(AbstractProvisioner):
             self.leaderIP = self.instanceMetaData['local-ipv4']  # this is PRIVATE IP
             self.keyName = list(self.instanceMetaData['public-keys'].keys())[0]
             self.tags = self._getLeader(self.clusterName).tags
-            self.masterPublicKey = self._setSSH()
+            self.mainPublicKey = self._setSSH()
             self.nodeStorage = config.nodeStorage
             spotBids = []
             self.nonPreemptableNodeTypes = []
@@ -138,7 +138,7 @@ class AWSProvisioner(AbstractProvisioner):
             self.leaderIP = None
             self.keyName = None
             self.tags = None
-            self.masterPublicKey = None
+            self.mainPublicKey = None
             self.nodeStorage = None
         self.subnetID = None
 
@@ -156,11 +156,11 @@ class AWSProvisioner(AbstractProvisioner):
         # the security group name is used as the cluster identifier
         sgs = self._createSecurityGroup(ctx, clusterName, vpcSubnet)
         bdm = self._getBlockDeviceMapping(leaderInstanceType, rootVolSize=leaderStorage)
-        self.masterPublicKey = 'AAAAB3NzaC1yc2Enoauthorizedkeyneeded'
+        self.mainPublicKey = 'AAAAB3NzaC1yc2Enoauthorizedkeyneeded'
         leaderData = dict(role='leader',
                           image=applianceSelf(),
-                          entrypoint='mesos-master',
-                          sshKey=self.masterPublicKey,
+                          entrypoint='mesos-main',
+                          sshKey=self.mainPublicKey,
                           args=leaderArgs.format(name=clusterName))
         userData = awsUserData.format(**leaderData)
         kwargs = {'key_name': keyName, 'security_group_ids': [sg.id for sg in sgs],
@@ -301,11 +301,11 @@ class AWSProvisioner(AbstractProvisioner):
         bdm = self._getBlockDeviceMapping(instanceType, rootVolSize=self.nodeStorage)
         arn = self._getProfileARN(self.ctx)
         keyPath = '' if not self.config or not self.config.sseKey else self.config.sseKey
-        entryPoint = 'mesos-slave' if not self.config or not self.config.sseKey else "waitForKey.sh"
+        entryPoint = 'mesos-subordinate' if not self.config or not self.config.sseKey else "waitForKey.sh"
         workerData = dict(role='worker',
                           image=applianceSelf(),
                           entrypoint=entryPoint,
-                          sshKey=self.masterPublicKey,
+                          sshKey=self.mainPublicKey,
                           args=workerArgs.format(ip=self.leaderIP, preemptable=preemptable, keyPath=keyPath))
         userData = awsUserData.format(**workerData)
         sgs = [sg for sg in self.ctx.ec2.get_all_security_groups() if sg.name == self.clusterName]
@@ -389,11 +389,11 @@ class AWSProvisioner(AbstractProvisioner):
         os.chmod('/root/.ssh', 0o700)
         subprocess.check_call(['bash', '-c', 'eval $(ssh-agent) && ssh-add -k'])
         with open('/root/.ssh/id_rsa.pub') as f:
-            masterPublicKey = f.read()
-        masterPublicKey = masterPublicKey.split(' ')[1]  # take 'body' of key
+            mainPublicKey = f.read()
+        mainPublicKey = mainPublicKey.split(' ')[1]  # take 'body' of key
         # confirm it really is an RSA public key
-        assert masterPublicKey.startswith('AAAAB3NzaC1yc2E'), masterPublicKey
-        return masterPublicKey
+        assert mainPublicKey.startswith('AAAAB3NzaC1yc2E'), mainPublicKey
+        return mainPublicKey
 
     @classmethod
     def _buildContext(cls, clusterName, zone=None):

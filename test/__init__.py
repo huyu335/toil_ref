@@ -306,7 +306,7 @@ def needs_aws(test_item):
         if boto_credentials:
             return test_item
         if os.path.exists(dot_aws_credentials_path) or runningOnEC2():
-            # Assume that EC2 machines like the Jenkins slave that we run CI on will have IAM roles
+            # Assume that EC2 machines like the Jenkins subordinate that we run CI on will have IAM roles
             return test_item
         else:
             return unittest.skip("Configure ~/.aws/credentials with AWS credentials to include "
@@ -786,7 +786,7 @@ class ApplianceTestSupport(ToilTest):
                Beware that if KEY is a path to a directory, its entire content will be deleted
                when the cluster is torn down.
 
-        :param int numCores: The number of cores to be offered by the Mesos slave process running
+        :param int numCores: The number of cores to be offered by the Mesos subordinate process running
                in the worker container.
 
         :rtype: (ApplianceTestSupport.Appliance, ApplianceTestSupport.Appliance)
@@ -937,7 +937,7 @@ class ApplianceTestSupport(ToilTest):
             return 'leader'
 
         def _entryPoint(self):
-            return 'mesos-master'
+            return 'mesos-main'
 
         def _containerCommand(self):
             return ['--registry=in_memory',
@@ -951,7 +951,7 @@ class ApplianceTestSupport(ToilTest):
             super(ApplianceTestSupport.WorkerThread, self).__init__(outer, mounts)
 
         def _entryPoint(self):
-            return 'mesos-slave'
+            return 'mesos-subordinate'
 
         def _getRole(self):
             return 'worker'
@@ -959,6 +959,6 @@ class ApplianceTestSupport(ToilTest):
         def _containerCommand(self):
             return ['--work_dir=/var/lib/mesos',
                     '--ip=127.0.0.1',
-                    '--master=127.0.0.1:5050',
+                    '--main=127.0.0.1:5050',
                     '--attributes=preemptable:False',
                     '--resources=cpus(*):%i' % self.numCores]

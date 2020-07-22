@@ -61,7 +61,7 @@ logging.getLogger("urllib3.connectionpool").setLevel(logging.WARNING)
 
 logDir = '--log_dir=/var/lib/mesos'
 leaderDockerArgs = logDir + ' --registry=in_memory --cluster={name}'
-workerDockerArgs = '{keyPath} --work_dir=/var/lib/mesos --master={ip}:5050 --attributes=preemptable:{preemptable} ' + logDir
+workerDockerArgs = '{keyPath} --work_dir=/var/lib/mesos --main={ip}:5050 --attributes=preemptable:{preemptable} ' + logDir
 gceUserData = """#cloud-config
 
 write_files:
@@ -223,7 +223,7 @@ class GCEProvisioner(AbstractProvisioner):
 
             leader = self._getLeader()
             self.leaderIP = leader.private_ips[0]  # this is PRIVATE IP
-            self.masterPublicKey = self._setSSH()
+            self.mainPublicKey = self._setSSH()
 
             self.botoPath = self.nodeBotoPath
             self.credentialsPath = GoogleJobStore.nodeServiceAccountJson
@@ -254,7 +254,7 @@ class GCEProvisioner(AbstractProvisioner):
             self.leaderIP = None
             self.keyName = None
             self.tags = None
-            self.masterPublicKey = None
+            self.mainPublicKey = None
             self.nodeStorage = None
             self.gceUserDataWorker = gceUserData
             self.botoPath = None
@@ -303,7 +303,7 @@ class GCEProvisioner(AbstractProvisioner):
 
         leaderData = dict(role='leader',
                           dockerImage=applianceSelf(),
-                          entrypoint='mesos-master',
+                          entrypoint='mesos-main',
                           dockerArgs=leaderDockerArgs.format(name=clusterName))
         userData = gceUserData.format(**leaderData)
         metadata = {'items': [{'key': 'user-data', 'value': userData}]}
@@ -445,12 +445,12 @@ class GCEProvisioner(AbstractProvisioner):
         self._terminateInstances(instancesToKill)
 
     def addNodes(self, nodeType, numNodes, preemptable):
-        # If keys are rsynced, then the mesos-slave needs to be started after the keys have been
+        # If keys are rsynced, then the mesos-subordinate needs to be started after the keys have been
         # transferred. The waitForKey.sh script loops on the new VM until it finds the keyPath file, then it starts the
-        # mesos-slave. If there are multiple keys to be transferred, then the last one to be transferred must be
+        # mesos-subordinate. If there are multiple keys to be transferred, then the last one to be transferred must be
         # set to keyPath.
         keyPath = ''
-        entryPoint = 'mesos-slave'
+        entryPoint = 'mesos-subordinate'
         self.botoExists = False
         if self.botoPath is not None and os.path.exists(self.botoPath):
             entryPoint = "waitForKey.sh"
@@ -463,7 +463,7 @@ class GCEProvisioner(AbstractProvisioner):
         workerData = dict(role='worker',
                           dockerImage=applianceSelf(),
                           entrypoint=entryPoint,
-                          sshKey=self.masterPublicKey,
+                          sshKey=self.mainPublicKey,
                           dockerArgs=workerDockerArgs.format(ip=self.leaderIP, preemptable=preemptable, keyPath=keyPath))
 
         #kwargs["subnet_id"] = self.subnetID if self.subnetID else self._getClusterInstance(self.instanceMetaData).subnet_id
@@ -913,8 +913,8 @@ class GCEProvisioner(AbstractProvisioner):
         os.chmod('/root/.ssh', 0o700)
         subprocess.check_call(['bash', '-c', 'eval $(ssh-agent) && ssh-add -k'])
         with open('/root/.ssh/id_rsa.pub') as f:
-            masterPublicKey = f.read()
-        masterPublicKey = masterPublicKey.split(' ')[1]  # take 'body' of key
+            mainPublicKey = f.read()
+        mainPublicKey = mainPublicKey.split(' ')[1]  # take 'body' of key
         # confirm it really is an RSA public key
-        assert masterPublicKey.startswith('AAAAB3NzaC1yc2E'), masterPublicKey
-        return masterPublicKey
+        assert mainPublicKey.startswith('AAAAB3NzaC1yc2E'), mainPublicKey
+        return mainPublicKey

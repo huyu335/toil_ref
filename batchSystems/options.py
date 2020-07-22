@@ -76,8 +76,8 @@ def _singleMachineOptions(addOptionFn, config):
 
 
 def _mesosOptions(addOptionFn, config=None):
-    addOptionFn("--mesosMaster", dest="mesosMasterAddress", default=getPublicIP() + ':5050',
-                help=("The host and port of the Mesos master separated by colon. (default: %(default)s)"))
+    addOptionFn("--mesosMain", dest="mesosMainAddress", default=getPublicIP() + ':5050',
+                help=("The host and port of the Mesos main separated by colon. (default: %(default)s)"))
 
 # Built in batch systems that have options
 _OPTIONS = [
@@ -143,7 +143,7 @@ def setDefaultOptions(config):
     config.linkImports = False
 
     # mesos
-    config.mesosMasterAddress = '%s:5050' % getPublicIP()
+    config.mesosMainAddress = '%s:5050' % getPublicIP()
 
     # parasol
     config.parasolCommand = 'parasol'

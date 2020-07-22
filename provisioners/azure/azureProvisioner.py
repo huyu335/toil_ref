@@ -95,7 +95,7 @@ class AzureProvisioner(AnsibleDriver):
             self.keyName = tags.get('owner', 'no-owner')
             self.leaderIP = self._getNodes('leader')[0].privateIP
             self._setSSH()  # create id_rsa.pub file on the leader if it is not there
-            self.masterPublicKeyFile = '/root/.ssh/id_rsa.pub'
+            self.mainPublicKeyFile = '/root/.ssh/id_rsa.pub'
 
             # read given configuration parameters
             self.nodeStorage = config.nodeStorage
@@ -113,7 +113,7 @@ class AzureProvisioner(AnsibleDriver):
             self.leaderIP = None
             self.keyName = None
             self.vmTags = None
-            self.masterPublicKeyFile = None
+            self.mainPublicKeyFile = None
             self.nodeStorage = None
 
     def launchCluster(self, leaderNodeType, keyName, clusterName, zone,
@@ -136,7 +136,7 @@ class AzureProvisioner(AnsibleDriver):
         self.keyName = keyName
         self.region = zone
         self.nodeStorage = nodeStorage
-        self.masterPublicKeyFile = kwargs['publicKeyFile']
+        self.mainPublicKeyFile = kwargs['publicKeyFile']
 
         # Try deleting the resource group. This will fail if it exists.
         ansibleArgs = {
@@ -157,7 +157,7 @@ class AzureProvisioner(AnsibleDriver):
         cloudConfigArgs = {
             'image': applianceSelf(),
             'role': "leader",
-            'entrypoint': "mesos-master",
+            'entrypoint': "mesos-main",
             '_args': leaderArgs.format(name=self.clusterName),
         }
         ansibleArgs = {
@@ -169,7 +169,7 @@ class AzureProvisioner(AnsibleDriver):
             'role': "leader",
             'owner': self.keyName,  # Just a tag.
             'diskSize': str(leaderStorage),  # TODO: not implemented
-            'publickeyfile': self.masterPublicKeyFile   # The users public key to be added to authorized_keys
+            'publickeyfile': self.mainPublicKeyFile   # The users public key to be added to authorized_keys
         }
         ansibleArgs['cloudconfig'] = self._cloudConfig(cloudConfigArgs)
         self.callPlaybook(self.playbook['create'], ansibleArgs, wait=True)
@@ -226,7 +226,7 @@ class AzureProvisioner(AnsibleDriver):
         cloudConfigArgs = {
             'image': applianceSelf(),
             'role': "worker",
-            'entrypoint': "mesos-slave",
+            'entrypoint': "mesos-subordinate",
             '_args': workerArgs.format(ip=self.leaderIP, preemptable=False, keyPath='')
         }
 
@@ -236,7 +236,7 @@ class AzureProvisioner(AnsibleDriver):
                            diskSize=str(self.nodeStorage),
                            owner=self.keyName,
                            role="worker",
-                           publickeyfile=self.masterPublicKeyFile)
+                           publickeyfile=self.mainPublicKeyFile)
         ansibleArgs['cloudconfig'] = self._cloudConfig(cloudConfigArgs)
 
         instances = []
@@ -375,11 +375,11 @@ class AzureProvisioner(AnsibleDriver):
         os.chmod('/root/.ssh', 0o700)
         subprocess.check_call(['bash', '-c', 'eval $(ssh-agent) && ssh-add -k'])
         with open('/root/.ssh/id_rsa.pub') as f:
-            masterPublicKey = f.read()
-        masterPublicKey = masterPublicKey.split(' ')[1]  # take 'body' of key
+            mainPublicKey = f.read()
+        mainPublicKey = mainPublicKey.split(' ')[1]  # take 'body' of key
         # confirm it really is an RSA public key
-        assert masterPublicKey.startswith('AAAAB3NzaC1yc2E'), masterPublicKey
-        return masterPublicKey
+        assert mainPublicKey.startswith('AAAAB3NzaC1yc2E'), mainPublicKey
+        return mainPublicKey
 
     def _waitForNode(self, instanceIP, role):
         # wait here so docker commands can be used reliably afterwards

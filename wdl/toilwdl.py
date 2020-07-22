@@ -1145,7 +1145,7 @@ class ToilWDL:
         # toil cannot technically start with multiple jobs, so an empty
         # 'initialize_jobs' function is always called first to get around this
         fn_section = "def initialize_jobs(job):\n" + \
-                     "    job.fileStore.logToMaster('''initialize_jobs''')\n\n"
+                     "    job.fileStore.logToMain('''initialize_jobs''')\n\n"
 
         list_of_jobs_to_write = self.return_one_job_per_priority()
 
@@ -1169,7 +1169,7 @@ class ToilWDL:
         called a "task".  Each WDL task is written out in multiple steps:
 
         1: Header and inputs (e.g. 'def mapping(self, input1, input2)')
-        2: Log job name (e.g. 'job.fileStore.logToMaster('initialize_jobs')')
+        2: Log job name (e.g. 'job.fileStore.logToMain('initialize_jobs')')
         3: Create temp dir (e.g. 'tempDir = job.fileStore.getLocalTempDir()')
         4: import filenames and use readGlobalFile() to get files from the
            jobStore
@@ -1198,7 +1198,7 @@ class ToilWDL:
         # log to toil which job is being run when this function is called
         fn_start_dict = {"job_alias": job_alias}
         fn_start = heredoc_wdl('''
-                                 job.fileStore.logToMaster("{job_alias}")
+                                 job.fileStore.logToMain("{job_alias}")
                                  start = time.time()
 
                                  tempDir = job.fileStore.getLocalTempDir()
@@ -1238,7 +1238,7 @@ class ToilWDL:
         called a "task".  Each WDL task is written out in multiple steps:
 
         1: Header and inputs (e.g. 'def mapping(self, input1, input2)')
-        2: Log job name (e.g. 'job.fileStore.logToMaster('initialize_jobs')')
+        2: Log job name (e.g. 'job.fileStore.logToMain('initialize_jobs')')
         3: Create temp dir (e.g. 'tempDir = job.fileStore.getLocalTempDir()')
         4: Make a new folder for the execution to take place in
         5: import filenames and use readGlobalFile() to get files from the
@@ -1269,7 +1269,7 @@ class ToilWDL:
         # log to toil which job is being run when this function is called
         fn_start_dict = {"job_alias": job_alias}
         fn_start = heredoc_wdl('''
-                                 job.fileStore.logToMaster("{job_alias}")
+                                 job.fileStore.logToMain("{job_alias}")
                                  start = time.time()
 
                                  tempDir = job.fileStore.getLocalTempDir()
